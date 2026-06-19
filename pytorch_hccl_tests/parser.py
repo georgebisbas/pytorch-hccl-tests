@@ -44,11 +44,32 @@ def get_parser():
         "--buffer", type=str, default="", help="Buffer type to be used in benchmark"
     )
     parser.add_argument("--min", type=int, default=None, help="Minimum message size")
-    parser.add_argument("--max", type=int, default=None, help="Maximum message size")
+    parser.add_argument(
+        "--max",
+        type=int,
+        default=None,
+        help="Maximum message size in elements (default: 2^26 for bw/bibw, 2^27 for other P2P)",
+    )
     parser.add_argument(
         "--skip", type=int, default=None, help="Number of warmup iterations"
     )
     parser.add_argument(
         "--iterations", type=int, default=None, help="Number of iterations"
+    )
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=64,
+        help="Number of concurrent P2P ops per iteration (bw/bibw only)",
+    )
+    parser.add_argument(
+        "--sequential",
+        action="store_true",
+        help="bibw: transfer one direction at a time (legacy HCCL path)",
+    )
+    parser.add_argument(
+        "--no-verify",
+        action="store_true",
+        help="bibw: skip payload correctness checks",
     )
     return parser

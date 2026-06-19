@@ -45,6 +45,10 @@ class Options:
             self.skip_large = 3
         if self.args.max:
             self.max_message_size = self.args.max
+        elif bench in bw_benchs:
+            # bw/bibw keep 64 in-flight buffers per rank; cap message size to
+            # avoid NPU OOM or driver crashes at the largest sizes (~256 MiB/msg).
+            self.max_message_size = 1 << 26
         elif bench in pt2pt:
             self.max_message_size = 1 << 27
         if self.args.min:

@@ -104,6 +104,14 @@ def elaspsed_time_ms(backend: str, start, end):
         return (end - start) / 1000
 
 
+def calc_bw_gib_per_sec(size_in_bytes: int, avg_latency_ms: float) -> float:
+    """Algorithm bandwidth in GiB/s (bytes per rank / elapsed time)."""
+    if avg_latency_ms <= 0:
+        return 0.0
+    avg_latency_sec = avg_latency_ms / 1000.0
+    return size_in_bytes / (1024**3 * avg_latency_sec)
+
+
 def dist_init(device: str, local_rank: int):
     logger.info(f"Init distributed env device: {device} / local_rank {local_rank}")
     backend = None

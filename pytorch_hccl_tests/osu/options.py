@@ -24,7 +24,9 @@ class Options:
         self.update_options()
 
     def update_options(self):
-        pt2pt = {"latency", "bw", "bibw", "multi_lat"}
+        bench = self.args.benchmark.lower()
+        pt2pt = {"latency", "bw", "bibw", "multi_lat", "bandwidth", "multi-latency"}
+        bw_benchs = {"bw", "bibw", "bandwidth"}
         coll_reduce = {"reduce", "allreduce", "reduce_scatter"}
 
         if self.args.buffer:
@@ -32,22 +34,22 @@ class Options:
         if self.args.iterations:
             self.iterations = self.args.iterations
             self.iterations_large = int(self.args.iterations / 100) + 1
-        elif self.args.benchmark in {"bw", "bibw"}:
+        elif bench in bw_benchs:
             self.iterations = 100
             self.iterations_large = 30
         if self.args.skip:
             self.skip = self.args.skip
             self.skip_large = int(self.args.skip / 100) + 1
-        elif self.args.benchmark in {"bw", "bibw"}:
+        elif bench in bw_benchs:
             self.skip = 10
             self.skip_large = 3
         if self.args.max:
             self.max_message_size = self.args.max
-        elif self.args.benchmark in pt2pt:
+        elif bench in pt2pt:
             self.max_message_size = 1 << 27
         if self.args.min:
             self.min_message_size = self.args.min
-        elif self.args.benchmark in {"latency", "multi_lat"}:
+        elif bench in {"latency", "multi_lat", "multi-latency"}:
             self.min_message_size = 0
-        elif self.args.benchmark in coll_reduce:
+        elif bench in coll_reduce:
             self.min_message_size = 4

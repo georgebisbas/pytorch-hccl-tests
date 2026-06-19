@@ -125,7 +125,10 @@ def dist_init(device: str, local_rank: int):
     else:
         raise ValueError("unknown device")
 
-    dist.init_process_group(backend=backend)
+    if device in ("npu", "cuda"):
+        dist.init_process_group(backend=backend, device_id=local_rank)
+    else:
+        dist.init_process_group(backend=backend)
     return backend
 
 

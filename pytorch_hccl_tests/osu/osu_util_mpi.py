@@ -29,7 +29,10 @@ class Utils:
     def print_header(benchmark, rank: int):
         if rank == 0:
             logger.info("# PyTorch Benchmark %s Test" % (benchmark))
-            logger.info("# %-8s%18s" % ("Size (B)", "Elapsed Time (ms)"))
+            logger.info(
+                "# %-8s%18s%18s"
+                % ("Size (B)", "Elapsed Time (ms)", "Bandwidth (GB/s)")
+            )
 
     def check_numprocs(numprocs: int, rank: int, limit: int):
         if limit == 2:

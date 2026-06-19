@@ -4,10 +4,12 @@ import pandas as pd
 import torch.distributed as dist
 
 from pytorch_hccl_tests.commons import (
+    BW_RESULT_COLUMNS,
     elaspsed_time_ms,
     get_device,
     get_device_event,
     get_nbytes_from_dtype,
+    log_timed_result,
     safe_rand,
     sync_device,
 )
@@ -27,11 +29,9 @@ def latency(args):
 
     options = Options("Latency", args)
     Utils.check_numprocs(world_size, rank, limit=2)
-
-    # Print header
     Utils.print_header(options.benchmark, rank)
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency_ms"])
+    df = pd.DataFrame(columns=BW_RESULT_COLUMNS)
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
@@ -61,18 +61,16 @@ def latency(args):
         dist.barrier()
 
         total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
-
-        # Divide by 2 since one messsage sent and one message received
         avg_latency_ms = (
             Utils.avg_lat(total_time_ms, options.iterations, world_size, device) / 2
         )
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-            logger.info("%-10d%18.2f" % (size_in_bytes, avg_latency_ms))
-            new_row = {"size_in_bytes": size_in_bytes, "avg_latency_ms": avg_latency_ms}
+            new_row = log_timed_result(
+                logger, size_in_bytes, avg_latency_ms, size_in_bytes
+            )
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # Persist result to CSV file
     if rank == 0:
         df.to_csv(f"osu_latency-{device.type}-{dtype}-{world_size}.csv", index=False)

@@ -4,11 +4,12 @@ import pandas as pd
 import torch.distributed as dist
 
 from pytorch_hccl_tests.commons import (
-    calc_bw_gib_per_sec,
+    BW_RESULT_COLUMNS,
     elaspsed_time_ms,
     get_device,
     get_device_event,
     get_nbytes_from_dtype,
+    log_timed_result,
     safe_rand,
     sync_device,
 )
@@ -28,23 +29,15 @@ def allreduce(args):
 
     options = Options("Allreduce", args)
     Utils.check_numprocs(world_size, rank, limit=3)
+    Utils.print_header(options.benchmark, rank)
 
-    if rank == 0:
-        logger.info("# PyTorch Benchmark %s Test" % (options.benchmark))
-        logger.info(
-            "# %-8s%18s%18s"
-            % ("Size (B)", "Elapsed Time (ms)", "Bandwidth (GB/s)")
-        )
-
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency_ms", "bw_gib_per_sec"])
+    df = pd.DataFrame(columns=BW_RESULT_COLUMNS)
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
             options.skip = options.skip_large
             options.iterations = options.iterations_large
 
-        # safe_rand is a wrapper of torch.rand for floats and
-        # torch.randint for integral types
         tensor = safe_rand(size, dtype=dtype).to(device)
 
         dist.barrier()
@@ -63,17 +56,8 @@ def allreduce(args):
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-            bw_gib_per_sec = calc_bw_gib_per_sec(size_in_bytes, avg_latency_ms)
-            logger.info(
-                "%-10d%18.2f%18.4f" % (size, avg_latency_ms, bw_gib_per_sec)
-            )
-            new_row = {
-                "size_in_bytes": size_in_bytes,
-                "avg_latency_ms": avg_latency_ms,
-                "bw_gib_per_sec": bw_gib_per_sec,
-            }
+            new_row = log_timed_result(logger, size, avg_latency_ms, size_in_bytes)
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # Persist result to CSV file
     if rank == 0:
         df.to_csv(f"osu_allreduce-{device.type}-{dtype}-{world_size}.csv", index=False)

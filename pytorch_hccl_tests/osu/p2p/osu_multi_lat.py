@@ -4,10 +4,12 @@ import pandas as pd
 import torch.distributed as dist
 
 from pytorch_hccl_tests.commons import (
+    BW_RESULT_COLUMNS,
     elaspsed_time_ms,
     get_device,
     get_device_event,
     get_nbytes_from_dtype,
+    log_timed_result,
     safe_rand,
 )
 from pytorch_hccl_tests.osu.options import Options
@@ -26,10 +28,9 @@ def multi_lat(args):
     pg = None
 
     options = Options("Multi Latency", args)
-
     Utils.print_header(options.benchmark, rank)
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency"])
+    df = pd.DataFrame(columns=BW_RESULT_COLUMNS)
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
@@ -37,8 +38,6 @@ def multi_lat(args):
             options.iterations = options.iterations_large
 
         iterations = list(range(options.iterations + options.skip))
-        # safe_rand is a wrapper of torch.rand for floats and
-        # torch.randint for integral types
         s_msg = safe_rand(size, dtype=dtype).to(device)
         r_msg = safe_rand(size, dtype=dtype).to(device)
 
@@ -61,18 +60,17 @@ def multi_lat(args):
             end_event = get_device_event(backend)
 
         total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
-
         avg_latency_ms = (
             Utils.avg_lat(total_time_ms, options.iterations, world_size, device) / 2
         )
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-            logger.info("%-10d%18.2f" % (size_in_bytes, avg_latency_ms))
-            new_row = {"size_in_bytes": int(size), "avg_latency_ms": avg_latency_ms}
+            new_row = log_timed_result(
+                logger, size_in_bytes, avg_latency_ms, size_in_bytes
+            )
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # Persist result to CSV file
     if rank == 0:
         df.to_csv(
             f"osu_multi_latency-{device.type}-{dtype}-{world_size}.csv", index=False

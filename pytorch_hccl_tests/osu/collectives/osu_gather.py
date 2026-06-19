@@ -4,10 +4,12 @@ import pandas as pd
 import torch.distributed as dist
 
 from pytorch_hccl_tests.commons import (
+    BW_RESULT_COLUMNS,
     elaspsed_time_ms,
     get_device,
     get_device_event,
     get_nbytes_from_dtype,
+    log_timed_result,
     safe_rand,
     sync_device,
 )
@@ -29,15 +31,13 @@ def osu_gather(args):
     Utils.check_numprocs(world_size, rank, limit=3)
     Utils.print_header(options.benchmark, rank)
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency"])
+    df = pd.DataFrame(columns=BW_RESULT_COLUMNS)
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
             options.skip = options.skip_large
             options.iterations = options.iterations_large
 
-        # safe_rand is a wrapper of torch.rand for floats and
-        # torch.randint for integral types
         tensor = safe_rand(size, dtype=dtype).to(device)
         gather_list = None
         if rank == 0:
@@ -60,9 +60,8 @@ def osu_gather(args):
         )
 
         if rank == 0:
-            logger.info("%-10d%18.2f" % (size, avg_latency_ms))
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-            new_row = {"size_in_bytes": size_in_bytes, "avg_latency_ms": avg_latency_ms}
+            new_row = log_timed_result(logger, size, avg_latency_ms, size_in_bytes)
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
     if rank == 0:

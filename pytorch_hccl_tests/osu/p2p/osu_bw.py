@@ -4,10 +4,12 @@ import pandas as pd
 import torch.distributed as dist
 
 from pytorch_hccl_tests.commons import (
+    BW_RESULT_COLUMNS,
     elaspsed_time_ms,
     get_device,
     get_device_event,
     get_nbytes_from_dtype,
+    log_timed_result,
     safe_rand,
     sync_device,
     wait_all,
@@ -28,12 +30,9 @@ def bw(args):
 
     options = Options("Bandwidth", args)
     Utils.check_numprocs(world_size, rank, limit=2)
+    Utils.print_header(options.benchmark, rank)
 
-    if rank == 0:
-        logger.info("# OMB-Py MPI %s Test" % (options.benchmark))
-        logger.info("# %-8s%18s" % ("Size (B)", "Bandwidth (MB/s)"))
-
-    df = pd.DataFrame(columns=["size_in_bytes", "bw_mb_per_sec"])
+    df = pd.DataFrame(columns=BW_RESULT_COLUMNS)
 
     window_size = 64
     for size in Utils.message_sizes(options):
@@ -46,13 +45,10 @@ def bw(args):
 
         dist.barrier()
         if rank == 0:
-            # safe_rand is a wrapper of torch.rand for floats and
-            # torch.randint for integral types
             s_msg = [
                 safe_rand(size, dtype=dtype).to(device) for _ in range(window_size)
             ]
             r_msg = safe_rand(4, dtype=dtype).to(device)
-            # Iterate 'options.iterations' times and skip first iterations (warm-up)
             for i in range(options.iterations + options.skip):
                 if i == options.skip:
                     start_event = get_device_event(backend)
@@ -75,22 +71,13 @@ def bw(args):
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-
-            # Number of total_iterations
             total_iterations = options.iterations * window_size
-
             total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
-            total_time_sec_per_iter = total_time_ms / (1000 * total_iterations)
-
-            # 'size_in_bytes' in bytes, rescale to MBs (1/1024)
-            bw_mb_per_sec = size_in_bytes / (1024 * total_time_sec_per_iter)
-            logger.info("%-10d%18.2f" % (size_in_bytes, bw_mb_per_sec))
-            new_row = {
-                "size_in_bytes": int(size_in_bytes),
-                "bw_mb_per_sec": bw_mb_per_sec,
-            }
+            avg_latency_ms = total_time_ms / total_iterations
+            new_row = log_timed_result(
+                logger, size_in_bytes, avg_latency_ms, size_in_bytes
+            )
             df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
 
-    # Persist result to CSV file
     if rank == 0:
         df.to_csv(f"osu_bandwidth-{device.type}-{dtype}-{world_size}.csv", index=False)

@@ -30,19 +30,23 @@ DTYPE = os.environ.get("HCCL_DTYPE", "float16")
 PT_VER = torch.__version__
 
 X_LABEL = "size_in_bytes"
-Y_LABEL = "bw_mb_per_sec"
+Y_LABEL = "bw_gib_per_sec"
 
 
 def main():
     df = pd.read_csv(f"osu_bandwidth-{DEVICE}-{DTYPE}-2.csv")
-    df.rename(
-        columns={"size_in_bytes": X_LABEL, "bw_mb_per_sec": Y_LABEL}, inplace=True
-    )
+    if Y_LABEL not in df.columns and "bw_mb_per_sec" in df.columns:
+        Y_LABEL_LOCAL = "bw_mb_per_sec"
+        y_axis_label = "Bandwidth (MB/s)"
+    else:
+        Y_LABEL_LOCAL = Y_LABEL
+        y_axis_label = "Bandwidth (GB/s)"
+    df.rename(columns={"size_in_bytes": X_LABEL}, inplace=True)
 
     sns.despine(right=True)
     ax = sns.lineplot(
         x=X_LABEL,
-        y=Y_LABEL,
+        y=Y_LABEL_LOCAL,
         sizes=(20, 200),
         legend=False,
         data=df,
@@ -50,7 +54,7 @@ def main():
 
     ax = sns.scatterplot(
         x=X_LABEL,
-        y=Y_LABEL,
+        y=Y_LABEL_LOCAL,
         sizes=(20, 200),
         legend="auto",
         data=df,
@@ -59,7 +63,7 @@ def main():
     ax.set(xscale="log")
     ax.set(yscale="log")
     ax.set_xlabel("Message length (bytes)")
-    ax.set_ylabel("Bandwidth (MB/s)")
+    ax.set_ylabel(y_axis_label)
     title = f"OSU-MPI Bandwidth benchmark\n (Device: {DEVICE} | dtype: {DTYPE}"
     title += f" | PT: {PT_VER}"
     title += ")"

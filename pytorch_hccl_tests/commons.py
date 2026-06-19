@@ -112,6 +112,28 @@ def calc_bw_gib_per_sec(size_in_bytes: int, avg_latency_ms: float) -> float:
     return size_in_bytes / (1024**3 * avg_latency_sec)
 
 
+BW_RESULT_COLUMNS = ["size_in_bytes", "avg_latency_ms", "bw_gib_per_sec"]
+
+
+def timed_result_row(size_in_bytes: int, avg_latency_ms: float) -> dict:
+    return {
+        "size_in_bytes": size_in_bytes,
+        "avg_latency_ms": avg_latency_ms,
+        "bw_gib_per_sec": calc_bw_gib_per_sec(size_in_bytes, avg_latency_ms),
+    }
+
+
+def log_timed_result(
+    logger, size_display: int, avg_latency_ms: float, size_in_bytes: int
+) -> dict:
+    row = timed_result_row(size_in_bytes, avg_latency_ms)
+    logger.info(
+        "%-10d%18.2f%18.4f"
+        % (size_display, avg_latency_ms, row["bw_gib_per_sec"])
+    )
+    return row
+
+
 def dist_init(device: str, local_rank: int):
     logger.info(f"Init distributed env device: {device} / local_rank {local_rank}")
     backend = None

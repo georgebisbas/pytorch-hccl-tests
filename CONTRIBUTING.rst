@@ -15,7 +15,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/Algebraic-Programming/pytorch-hccl-tests/issues.
+Report bugs at https://github.com/huawei-csl/pytorch-hccl-tests/issues.
 
 If you are reporting a bug, please include:
 
@@ -45,7 +45,7 @@ articles, and such.
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to file an issue at https://github.com/Algebraic-Programming/pytorch-hccl-tests/issues.
+The best way to send feedback is to file an issue at https://github.com/huawei-csl/pytorch-hccl-tests/issues.
 
 If you are proposing a feature:
 
@@ -64,11 +64,14 @@ Ready to contribute? Here's how to set up `pytorch_hccl_tests` for local develop
 
     $ git clone git@github.com:your_name_here/pytorch_hccl_tests.git
 
-3. Install your local copy into a virtualenv. Assuming you have virtualenvwrapper installed, this is how you set up your fork for local development::
+3. Install your local copy into a virtualenv. A Python 3.10 environment is the
+   maintained baseline for the fork::
 
-    $ mkvirtualenv pytorch_hccl_tests
+    $ python3.10 -m venv .venv
+    $ source .venv/bin/activate
     $ cd pytorch_hccl_tests/
-    $ python setup.py develop
+    $ pip install -r requirements_dev.txt
+    $ python -m pip install -e .
 
 4. Create a branch for local development::
 
@@ -80,7 +83,7 @@ Ready to contribute? Here's how to set up `pytorch_hccl_tests` for local develop
    tests, including testing other Python versions with tox::
 
     $ flake8 pytorch_hccl_tests tests
-    $ python setup.py test or pytest
+    $ pytest
     $ tox
 
    To get flake8 and tox, just pip install them into your virtualenv.
@@ -102,9 +105,9 @@ Before you submit a pull request, check that it meets these guidelines:
 2. If the pull request adds functionality, the docs should be updated. Put
    your new functionality into a function with a docstring, and add the
    feature to the list in README.rst.
-3. The pull request should work for Python 3.7, 3.8 and 3.9. Check
-   https://github.com/Algebraic-Programming/pytorch-hccl-tests/actions
-   and make sure that the tests pass for all supported Python versions.
+3. The pull request should work for the maintained Python baseline in CI.
+    Check https://github.com/huawei-csl/pytorch-hccl-tests/actions and make
+    sure the tests pass for all supported environments.
 
 Tips
 ----

@@ -1,8 +1,10 @@
+import importlib
 import logging
+import os
 import platform
 import sys
 from time import perf_counter_ns as now
-from typing import Any, List
+from typing import Any, Callable, List
 
 import torch
 import torch.distributed as dist
@@ -26,6 +28,48 @@ _TORCH_DTYPES = {
     "float64": torch.float64,
     "double": torch.float64,
 }
+
+
+def _load_torch_npu() -> Any:
+    return importlib.import_module("torch_npu")
+
+
+def _is_hccl_available() -> bool:
+    checker = getattr(torch.distributed, "is_hccl_available", None)
+    return bool(checker()) if callable(checker) else False
+
+
+def get_npu_runtime_details(
+    importer: Callable[[], Any] | None = None,
+    hccl_checker: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    details = {
+        "python_version": platform.python_version(),
+        "torch_version": torch.__version__,
+        "ascend_home_path": os.getenv("ASCEND_HOME_PATH") or "unset",
+        "ascend_opp_path": os.getenv("ASCEND_OPP_PATH") or "unset",
+        "torch_npu_version": None,
+        "hccl_available": False,
+        "import_error": None,
+        "hccl_error": None,
+    }
+    importer = importer or _load_torch_npu
+    hccl_checker = hccl_checker or _is_hccl_available
+
+    try:
+        torch_npu = importer()
+    except Exception as exc:
+        details["import_error"] = str(exc)
+        return details
+
+    details["torch_npu_version"] = getattr(torch_npu, "__version__", "unknown")
+
+    try:
+        details["hccl_available"] = bool(hccl_checker())
+    except Exception as exc:
+        details["hccl_error"] = str(exc)
+
+    return details
 
 
 def get_dtype(dtype: str) -> torch.dtype:
@@ -111,11 +155,25 @@ def dist_init(device: str, local_rank: int):
         backend = "gloo"
 
     elif device == "npu":
-        try:
-            import torch_npu  # noqa
-        except Exception:
+        details = get_npu_runtime_details()
+        if details["import_error"] is not None:
             raise ImportError(
-                "You must install PyTorch Ascend Adaptor from https://gitee.com/ascend/pytorch."
+                "NPU benchmark requested but torch-npu could not be imported. "
+                f"Python={details['python_version']}, torch={details['torch_version']}, "
+                f"ASCEND_HOME_PATH={details['ascend_home_path']}. "
+                "Install a torch-npu build that matches the local CANN runtime. "
+                "The Makefile install-npu-* targets are the supported setup path for this fork."
+            )
+        if not details["hccl_available"]:
+            extra = ""
+            if details["hccl_error"]:
+                extra = f" HCCL probe error: {details['hccl_error']}."
+            raise RuntimeError(
+                "torch-npu imported successfully but HCCL is unavailable. "
+                f"torch_npu={details['torch_npu_version']}, "
+                f"ASCEND_HOME_PATH={details['ascend_home_path']}, "
+                f"ASCEND_OPP_PATH={details['ascend_opp_path']}.{extra} "
+                "Ensure the torch-npu build matches the local CANN installation."
             )
         torch.npu.set_device(local_rank)
         backend = "hccl"
@@ -165,17 +223,23 @@ def log_env_info(device, backend):
     logger.info(f"PyTorch CUDA enabled?: {torch.cuda.is_available()}")
     logger.info(f"PyTorch NCCL enabled?: {torch.distributed.is_nccl_available()}")
     logger.info(f"PyTorch Gloo enabled?: {torch.distributed.is_gloo_available()}")
-    try:
-        import torch_npu  # noqa
-
-        logger.info(f"PyTorch HCCL enabled?: {torch.distributed.is_hccl_available()}")
-        logger.info(f"PyTorch Ascend Adapter (NPU) version: {torch_npu.__version__}")
-    except Exception:
+    details = get_npu_runtime_details()
+    logger.info(f"ASCEND_HOME_PATH: {details['ascend_home_path']}")
+    logger.info(f"ASCEND_OPP_PATH: {details['ascend_opp_path']}")
+    if details["import_error"] is None:
+        logger.info(f"PyTorch HCCL enabled?: {details['hccl_available']}")
+        logger.info(
+            f"PyTorch Ascend Adapter (NPU) version: {details['torch_npu_version']}"
+        )
+        if details["hccl_error"]:
+            logger.warning(f"PyTorch HCCL probe error: {details['hccl_error']}")
+    else:
         logger.warning("*" * 80)
         logger.warning("* PyTorch Ascend (NPU) is NOT installed.")
         logger.warning(
-            "* You must install PyTorch Ascend Adaptor from https://gitee.com/ascend/pytorch. *"
+            "* Install a torch-npu build that matches the local CANN runtime. *"
         )
+        logger.warning(f"* Import error: {details['import_error']} *")
         logger.warning("*" * 80)
 
     logger.info(f"Using device *{device}* with *{backend}* backend")

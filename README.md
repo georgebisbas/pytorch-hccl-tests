@@ -8,11 +8,16 @@ Currently, only the P2P benchmarks are ported and tested. Additionally, `allredu
 ### Development
 
 ```bash
-python -m venv venv
-source venv/bin/activate
+python3.10 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements_dev.txt
-make install
+make install            # CPU-only path
+# or: make install-npu-arm / make install-npu-x86
 ```
+
+For NPU runs, install a `torch-npu` build that matches the local CANN runtime.
+The current fork baseline uses the `install-npu-*` targets in the Makefile as
+the supported setup path.
 
 
 ### Benchmark suites

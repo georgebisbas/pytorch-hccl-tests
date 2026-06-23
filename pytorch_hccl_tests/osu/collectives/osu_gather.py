@@ -29,7 +29,7 @@ def osu_gather(args):
     Utils.check_numprocs(world_size, rank, limit=3)
     Utils.print_header(options.benchmark, rank)
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency"])
+    rows = []
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
@@ -63,7 +63,9 @@ def osu_gather(args):
             logger.info("%-10d%18.2f" % (size, avg_latency_ms))
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
             new_row = {"size_in_bytes": size_in_bytes, "avg_latency_ms": avg_latency_ms}
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            rows.append(new_row)
 
     if rank == 0:
-        df.to_csv(f"osu_gather-{device.type}-{dtype}-{world_size}.csv", index=False)
+        pd.DataFrame(rows).to_csv(
+            f"osu_gather-{device.type}-{dtype}-{world_size}.csv", index=False
+        )

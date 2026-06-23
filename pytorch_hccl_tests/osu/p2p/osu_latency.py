@@ -29,9 +29,11 @@ def latency(args):
     Utils.check_numprocs(world_size, rank, limit=2)
 
     # Print header
-    Utils.print_header(options.benchmark, rank)
+    if rank == 0:
+        logger.info("# PyTorch Benchmark %s Test" % (options.benchmark))
+        logger.info("# %-8s%18s%18s" % ("Size (B)", "Latency (ms)", "BW (GB/s)"))
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency_ms"])
+    rows = []
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
@@ -69,10 +71,20 @@ def latency(args):
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
-            logger.info("%-10d%18.2f" % (size_in_bytes, avg_latency_ms))
-            new_row = {"size_in_bytes": size_in_bytes, "avg_latency_ms": avg_latency_ms}
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            # One-way bandwidth — avg_latency_ms is already one-way latency
+            # (the original code divides round-trip by 2 on lines 70-72).
+            t_oneway_sec = avg_latency_ms / 1000.0
+            bw_gbps = (size_in_bytes / 1e9) / t_oneway_sec if t_oneway_sec > 0 else 0.0
+            logger.info("%-10d%18.2f%18.2f" % (size_in_bytes, avg_latency_ms, bw_gbps))
+            new_row = {
+                "size_in_bytes": size_in_bytes,
+                "avg_latency_ms": avg_latency_ms,
+                "bw_gbps": bw_gbps,
+            }
+            rows.append(new_row)
 
     # Persist result to CSV file
     if rank == 0:
-        df.to_csv(f"osu_latency-{device.type}-{dtype}-{world_size}.csv", index=False)
+        pd.DataFrame(rows).to_csv(
+            f"osu_latency-{device.type}-{dtype}-{world_size}.csv", index=False
+        )

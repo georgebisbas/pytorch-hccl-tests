@@ -3,8 +3,8 @@
 # Benchmark a communication pattern for various world sizes and dtypes
 # Generates multiple CSV/PNG files
 
-# Install seabon for plotting
-pip install seaborn==0.13.2
+# Install plotting deps (see requirements_plotting.txt)
+pip install -r "${BASE_DIR}/../requirements_plotting.txt"
 
 
 export DEVICE="npu"

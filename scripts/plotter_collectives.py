@@ -38,17 +38,23 @@ Y_LABEL = "avg_latency_ms"
 
 
 def main():
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency_ms", col_name])
+    frames = []
 
     for world_size in WORLD_SIZES:
         s = str(world_size)
+        path = f"osu_{BENCHMARK}-{DEVICE}-{DTYPE}-{s}.csv"
         try:
-            local = pd.read_csv(f"osu_{BENCHMARK}-{DEVICE}-{DTYPE}-{s}.csv")
+            local = pd.read_csv(path)
             local[col_name] = s
-            df = pd.concat([df, local], axis=0)
+            frames.append(local)
         except FileNotFoundError as err:
             print(f"Error: {err}")
 
+    if not frames:
+        print("No benchmark CSV files found; nothing to plot.")
+        return 1
+
+    df = pd.concat(frames, ignore_index=True)
     df[col_name] = pd.Categorical(df[col_name])
 
     sns.despine(right=True)

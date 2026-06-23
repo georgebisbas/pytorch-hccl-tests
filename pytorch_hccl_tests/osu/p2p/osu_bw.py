@@ -31,9 +31,9 @@ def bw(args):
 
     if rank == 0:
         logger.info("# OMB-Py MPI %s Test" % (options.benchmark))
-        logger.info("# %-8s%18s" % ("Size (B)", "Bandwidth (MB/s)"))
+        logger.info("# %-8s%18s" % ("Size (B)", "Bandwidth (GB/s)"))
 
-    df = pd.DataFrame(columns=["size_in_bytes", "bw_mb_per_sec"])
+    rows = []
 
     window_size = 64
     for size in Utils.message_sizes(options):
@@ -76,21 +76,24 @@ def bw(args):
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
 
-            # Number of total_iterations
-            total_iterations = options.iterations * window_size
-
+            # Canonical OSU bandwidth formula: aggregate bandwidth across window.
+            # bw_gbps = (size_bytes * iterations * window_size) / (1e9 * t_sec)
+            # The division by 1e9 converts bytes to GB; multiplication by
+            # (iterations * window_size) accounts for all data moved through
+            # the pipeline of back-to-back non-blocking sends.
             total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
-            total_time_sec_per_iter = total_time_ms / (1000 * total_iterations)
+            t_sec = total_time_ms / 1000.0
+            bw_gbps = (size_in_bytes * options.iterations * window_size) / (1e9 * t_sec)
 
-            # 'size_in_bytes' in bytes, rescale to MBs (1/1024)
-            bw_mb_per_sec = size_in_bytes / (1024 * total_time_sec_per_iter)
-            logger.info("%-10d%18.2f" % (size_in_bytes, bw_mb_per_sec))
+            logger.info("%-10d%18.2f" % (size_in_bytes, bw_gbps))
             new_row = {
                 "size_in_bytes": int(size_in_bytes),
-                "bw_mb_per_sec": bw_mb_per_sec,
+                "bw_gbps": bw_gbps,
             }
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            rows.append(new_row)
 
     # Persist result to CSV file
     if rank == 0:
-        df.to_csv(f"osu_bandwidth-{device.type}-{dtype}-{world_size}.csv", index=False)
+        pd.DataFrame(rows).to_csv(
+            f"osu_bandwidth_gbps-{device.type}-{dtype}-{world_size}.csv", index=False
+        )

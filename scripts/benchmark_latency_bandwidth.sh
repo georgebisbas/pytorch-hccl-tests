@@ -3,8 +3,8 @@
 # Benchmark a communication pattern for various dtypes.
 # Generates multiple CSV/PNG files
 
-# Install seabon for plotting
-pip install seaborn==0.12.2
+# Install plotting deps (see requirements_plotting.txt)
+pip install -r "${BASE_DIR}/../requirements_plotting.txt"
 
 DEVICE="npu"
 DTYPES="int float16 float32"

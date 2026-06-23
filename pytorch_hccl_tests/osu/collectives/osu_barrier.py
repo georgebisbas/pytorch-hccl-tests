@@ -30,6 +30,6 @@ def barrier(args):
     toc = now()
     dist.barrier()
 
-    avg_lat = Utils.avg_lat(toc - tic, options.iterations, world_size, device)
+    avg_lat = Utils.avg_lat((toc - tic) / 1e6, options.iterations, world_size, device)
     if rank == 0:
         print("%-10d%18.2f" % (0, avg_lat))

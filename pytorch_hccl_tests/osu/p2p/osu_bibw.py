@@ -43,34 +43,38 @@ def bibw(args):
 
         window_sizes = list(range(window_size))
 
-        s_msg = safe_rand(size, dtype=dtype).to(device)
-        r_msg = safe_rand(size, dtype=dtype).to(device)
+        # Separate tensor buffer per window slot to avoid concurrent HCCL ops
+        # targeting the same memory (matches the unidirectional osu_bw.py pattern).
+        s_msg = [safe_rand(size, dtype=dtype).to(device) for _ in range(window_size)]
+        r_msg = [safe_rand(size, dtype=dtype).to(device) for _ in range(window_size)]
 
         send_requests = [None] * window_size
         recv_requests = [None] * window_size
 
-        dist.barrier()
+        # Tags are swapped between ranks (canonical OSU C: osu_bibw.c).
+        # Both ranks use the same wait ordering (sends before recvs).
+        # See https://mvapich.cse.ohio-state.edu/benchmarks/
         if rank == 0:
-            for i in range(options.iterations + options.skip):
-                if i == options.skip:
-                    start_event = get_device_event(backend)
-                for j in window_sizes:
-                    recv_requests[j] = dist.irecv(r_msg, 1, pg, 10)
-                for j in window_sizes:
-                    send_requests[j] = dist.isend(s_msg, 1, pg, 100)
+            partner = 1
+            recv_tag = 10
+            send_tag = 100
+        else:
+            partner = 0
+            recv_tag = 100
+            send_tag = 10
 
-                wait_all(send_requests)
-                wait_all(recv_requests)
-            end_event = get_device_event(backend)
-            sync_device(backend)
-        elif rank == 1:
-            for i in range(options.iterations + options.skip):
-                for j in window_sizes:
-                    recv_requests[j] = dist.irecv(r_msg, 0, pg, 100)
-                for j in window_sizes:
-                    send_requests[j] = dist.isend(s_msg, 0, pg, 10)
-                wait_all(recv_requests)
-                wait_all(send_requests)
+        dist.barrier()
+        for i in range(options.iterations + options.skip):
+            if i == options.skip:
+                start_event = get_device_event(backend)
+            for j in window_sizes:
+                recv_requests[j] = dist.irecv(r_msg[j], partner, pg, recv_tag)
+            for j in window_sizes:
+                send_requests[j] = dist.isend(s_msg[j], partner, pg, send_tag)
+            wait_all(send_requests)
+            wait_all(recv_requests)
+        end_event = get_device_event(backend)
+        sync_device(backend)
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)

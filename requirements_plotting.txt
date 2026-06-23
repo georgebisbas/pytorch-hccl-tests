@@ -1,0 +1,6 @@
+# Optional plotting deps for scripts/plotter_*.py and scripts/benchmark_*.sh.
+# pandas is already installed via `pip install .` / make install-npu-*.
+#
+#   pip install -r requirements_plotting.txt
+matplotlib>=3.8,<4
+seaborn==0.13.2

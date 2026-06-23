@@ -31,9 +31,9 @@ def bibw(args):
 
     if rank == 0:
         logger.info("# OMB-Py MPI %s Test" % (options.benchmark))
-        logger.info("# %-8s%18s" % ("Size (B)", "Bandwidth (MB/s)"))
+        logger.info("# %-8s%18s" % ("Size (B)", "Bandwidth (GB/s)"))
 
-    df = pd.DataFrame(columns=["size_in_bytes", "bw_mb_per_sec"])
+    rows = []
 
     window_size = 64
     for size in Utils.message_sizes(options):
@@ -75,19 +75,19 @@ def bibw(args):
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
 
-            # Number of total_iterations
-            total_iterations = options.iterations * window_size
-
+            # Canonical OSU bandwidth formula: aggregate bandwidth across window.
             total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
-            total_time_sec_per_iter = total_time_ms / (1000 * total_iterations)
+            t_sec = total_time_ms / 1000.0
+            bw_gbps = (size_in_bytes * options.iterations * window_size) / (1e9 * t_sec)
 
-            bw = size_in_bytes / total_time_ms
-            logger.info("%-10d%18.2f" % (size_in_bytes, bw))
+            logger.info("%-10d%18.2f" % (size_in_bytes, bw_gbps))
             new_row = {
-                "size_in_bytes": int(size),
-                "bw_mb_per_sec": total_time_sec_per_iter,
+                "size_in_bytes": int(size_in_bytes),
+                "bw_gbps": bw_gbps,
             }
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            rows.append(new_row)
 
     if rank == 0:
-        df.to_csv(f"osu_bibw-{device.type}-{dtype}-{world_size}.csv", index=False)
+        pd.DataFrame(rows).to_csv(
+            f"osu_bibw_gbps-{device.type}-{dtype}-{world_size}.csv", index=False
+        )

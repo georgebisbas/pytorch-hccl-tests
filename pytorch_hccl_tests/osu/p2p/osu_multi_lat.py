@@ -29,7 +29,7 @@ def multi_lat(args):
 
     Utils.print_header(options.benchmark, rank)
 
-    df = pd.DataFrame(columns=["size_in_bytes", "avg_latency"])
+    rows = []
 
     for size in Utils.message_sizes(options):
         if size > options.large_message_size:
@@ -69,11 +69,11 @@ def multi_lat(args):
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
             logger.info("%-10d%18.2f" % (size_in_bytes, avg_latency_ms))
-            new_row = {"size_in_bytes": int(size), "avg_latency_ms": avg_latency_ms}
-            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            new_row = {"size_in_bytes": size_in_bytes, "avg_latency_ms": avg_latency_ms}
+            rows.append(new_row)
 
     # Persist result to CSV file
     if rank == 0:
-        df.to_csv(
+        pd.DataFrame(rows).to_csv(
             f"osu_multi_latency-{device.type}-{dtype}-{world_size}.csv", index=False
         )

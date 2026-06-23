@@ -43,11 +43,26 @@ def bibw(args):
 
         window_sizes = list(range(window_size))
 
-        s_msg = safe_rand(size, dtype=dtype).to(device)
-        r_msg = safe_rand(size, dtype=dtype).to(device)
-
         send_requests = [None] * window_size
         recv_requests = [None] * window_size
+
+        # Tags are swapped between ranks (canonical OSU C / mpi4py).
+        # Rank 0 posts sends first, rank 1 posts recvs first — HCCL matches
+        # send/recv by posting position, so the first op on each rank must
+        # form a valid send↔recv pair.
+        # https://github.com/mpi4py/mpi4py/blob/1c1d41/demo/osu_bibw.py
+        # https://mvapich.cse.ohio-state.edu/benchmarks/
+        if rank == 0:
+            partner = 1
+            recv_tag = 10
+            send_tag = 100
+        else:
+            partner = 0
+            recv_tag = 100
+            send_tag = 10
+
+        s_msg = safe_rand(size, dtype=dtype).to(device)
+        r_msg = safe_rand(size, dtype=dtype).to(device)
 
         dist.barrier()
         if rank == 0:
@@ -55,30 +70,39 @@ def bibw(args):
                 if i == options.skip:
                     start_event = get_device_event(backend)
                 for j in window_sizes:
-                    recv_requests[j] = dist.irecv(r_msg, 1, pg, 10)
+                    send_requests[j] = dist.isend(s_msg, partner, pg, send_tag)
                 for j in window_sizes:
-                    send_requests[j] = dist.isend(s_msg, 1, pg, 100)
-
+                    recv_requests[j] = dist.irecv(r_msg, partner, pg, recv_tag)
                 wait_all(send_requests)
                 wait_all(recv_requests)
             end_event = get_device_event(backend)
             sync_device(backend)
-        elif rank == 1:
+        else:
             for i in range(options.iterations + options.skip):
+                if i == options.skip:
+                    start_event = get_device_event(backend)
                 for j in window_sizes:
-                    recv_requests[j] = dist.irecv(r_msg, 0, pg, 100)
+                    recv_requests[j] = dist.irecv(r_msg, partner, pg, recv_tag)
                 for j in window_sizes:
-                    send_requests[j] = dist.isend(s_msg, 0, pg, 10)
-                wait_all(recv_requests)
+                    send_requests[j] = dist.isend(s_msg, partner, pg, send_tag)
                 wait_all(send_requests)
+                wait_all(recv_requests)
+            end_event = get_device_event(backend)
+            sync_device(backend)
 
         if rank == 0:
             size_in_bytes = int(size) * get_nbytes_from_dtype(dtype)
 
-            # Canonical OSU bandwidth formula: aggregate bandwidth across window.
+            # Canonical OSU bidirectional bandwidth formula.
+            # Reports aggregate bandwidth across both directions.
+            # The × 2 accounts for both send and recv traffic at each
+            # iteration (osu_bibw.c line 113: ((size / 1.0e6) * loop
+            # * window_size * 2)).
             total_time_ms = elaspsed_time_ms(backend, start_event, end_event)
             t_sec = total_time_ms / 1000.0
-            bw_gbps = (size_in_bytes * options.iterations * window_size) / (1e9 * t_sec)
+            bw_gbps = (
+                size_in_bytes * options.iterations * window_size * 2 / (1e9 * t_sec)
+            )
 
             logger.info("%-10d%18.2f" % (size_in_bytes, bw_gbps))
             new_row = {

@@ -102,7 +102,9 @@ install: clean ## install the package to the active Python's site-packages
 	pip install .
 
 # You can override the env variables. Example `make latency -e DEVICE=npu`
-export WORLD_SIZE = 2
+# WORLD_SIZE uses ?= so an environment prefix is honored without -e, e.g.
+# `WORLD_SIZE=8 make mbw-mr DEVICE=npu`. A plain `=` would shadow the env value.
+export WORLD_SIZE ?= 2
 export DEVICE = cpu
 
 # To surpress a torchrun warning

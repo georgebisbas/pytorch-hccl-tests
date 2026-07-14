@@ -102,11 +102,8 @@ def mbw_mr(args):
                 dist.send(s_msg, partner, pg, 101)
         # leftover rank (odd world_size) only joins the collectives below
 
-        # Sum sender times on rank 0 (always a sender). Every rank must take
-        # part in the reduction, so non-senders contribute 0.
-        # float32 (not float64): HCCL does not support a float64/double reduce
-        # ("HCCL reduce: Unsupported data type at::kDouble"); a sum of per-rank
-        # seconds needs no double precision.
+        # All ranks participate in the reduction: senders contribute their
+        # measured time; non-senders contribute 0.
         t_sum = torch.tensor(local_t_sec, dtype=torch.float32).to(device)
         dist.reduce(t_sum, 0, op=dist.ReduceOp.SUM)
 
